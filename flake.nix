@@ -13,30 +13,45 @@
         flake-utils,
         nixpkgs,
         nixvim
-    }: 
-      flake-utils.lib.eachDefaultSystem (system: let
-        pkgs = import nixpkgs {inherit system;};
-        nixvim' = nixvim.legacyPackages.${system};
-        nixvimModule = {
-            inherit pkgs;
-            module = {
-                plugins.lazy = {
-                    enable = true;
-                    plugins = [
-                        pkgs.vimPlugins.plenary-nvim
-                        {
-                            name = "nuget-nvim";
-                            dev = true;
-                            dir = "./";
-                            # Not used but the module expects a package to be given
-                            pkg = pkgs.cowsay;
-                        }
-                    ];
+        }: 
+        flake-utils.lib.eachDefaultSystem (system: let
+            pkgs = import nixpkgs {inherit system;};
+            nixvim' = nixvim.legacyPackages.${system};
+            nixvimModule = {
+                inherit pkgs;
+                module = {
+                    extraConfigLua = ''
+                        function P(v)
+                            print(vim.inspect(v))
+                            return v
+                        end;
+
+                        function RELOAD(...)
+                            require("lazy").reload(...)
+                        end
+
+                        function R(name)
+                            RELOAD(name)
+                            return require(name)
+                        end
+                    '';
+                    plugins.lazy = {
+                        enable = true;
+                        plugins = [
+                            pkgs.vimPlugins.plenary-nvim
+                            {
+                                name = "nuget-nvim";
+                                dev = true;
+                                dir = "./";
+                                # Not used but the module expects a package to be given
+                                pkg = pkgs.cowsay;
+                            }
+                        ];
+                    };
                 };
             };
-        };
 
-        nvim = nixvim'.makeNixvimWithModule nixvimModule;
+            nvim = nixvim'.makeNixvimWithModule nixvimModule;
 
         in {
             devShells.default = pkgs.mkShell {
@@ -48,10 +63,8 @@
                     (pkgs.runCommand "devvim" { nativeBuildInputs = [ pkgs.makeWrapper ];} ''
                         mkdir -p $out/bin
                         makeWrapper ${nvim}/bin/nvim $out/bin/devvim --argv0 nvim
-                    '')
+                        '')
                 ];
             };
-
-            format = pkgs.alejandra;
         });
 }
